@@ -8,6 +8,7 @@ import { getCredentials, api, request, credentials } from '../../data/api-data';
 import { updatePermission } from '../../data/permissions.helper';
 import { password, adminUsername } from '../../data/user';
 import { createUser, deleteUser, login } from '../../data/users.helper';
+import { createRoom, deleteRoom } from '../../data/rooms.helper';
 
 describe('[Roles]', () => {
 	const isEnterprise = Boolean(process.env.IS_EE);
@@ -472,6 +473,86 @@ describe('[Roles]', () => {
 				});
 		});
 
+		it('should successfully remove a user from a role using roomId', { skip: !isEnterprise }, async () => {
+			const roomName = `role.removeUserFromRole.${Date.now()}`;
+			const roleName = `role.removeUserFromRole.room.${Date.now()}`;
+
+			let roomId = '';
+			let roleId = '';
+
+			try {
+				const room = (await createRoom({ type: 'c', name: roomName })).body.channel;
+				roomId = room._id;
+
+				await request
+					.post(api('roles.create'))
+					.set(credentials)
+					.send({
+						name: roleName,
+					})
+					.expect('Content-Type', 'application/json')
+					.expect(200)
+					.expect((res: Response) => {
+						expect(res.body).to.have.property('success', true);
+						expect(res.body).to.have.property('role');
+						roleId = res.body.role._id;
+					});
+
+				await request
+					.post(api('roles.addUserToRole'))
+					.set(credentials)
+					.send({
+						roleId,
+						username: testUser.username,
+						roomId,
+					})
+					.expect('Content-Type', 'application/json')
+					.expect(200)
+					.expect((res) => {
+						expect(res.body).to.have.property('success', true);
+					});
+
+				await request
+					.post(api('roles.removeUserFromRole'))
+					.set(credentials)
+					.send({
+						roleId,
+						username: testUser.username,
+						roomId,
+					})
+					.expect('Content-Type', 'application/json')
+					.expect(200)
+					.expect((res) => {
+						expect(res.body).to.have.property('success', true);
+					});
+
+				await request
+					.get(api('roles.getUsersInRole'))
+					.set(credentials)
+					.query({
+						role: roleId,
+						roomId,
+					})
+					.expect('Content-Type', 'application/json')
+					.expect(200)
+					.expect((res: Response) => {
+						expect(res.body).to.have.property('success', true);
+						expect(res.body).to.have.property('total', 0);
+						expect(res.body.users).to.be.an('array').that.is.empty;
+					});
+			} finally {
+				if (roleId) {
+					await request.post(api('roles.delete')).set(credentials).send({
+						roleId,
+					});
+				}
+
+				if (roomId) {
+					await deleteRoom({ type: 'c', roomId });
+				}
+			}
+		});
+
 		// TODO this is not the right way to do it. We're doing this way for now just because we have separate CI jobs for EE and CE,
 		// ideally we should have a single CI job that adds a license and runs both CE and EE tests.
 		it('should successfully remove a user from a role', { skip: !isEnterprise }, async () => {
@@ -484,7 +565,7 @@ describe('[Roles]', () => {
 				})
 				.expect('Content-Type', 'application/json')
 				.expect(200)
-				.expect((res: Response) => {
+				.expect((res) => {
 					expect(res.body).to.have.property('success', true);
 				});
 			await request
