@@ -274,7 +274,8 @@ const rolesRoutes = API.v1
 		async function action() {
 			const { bodyParams } = this;
 
-			const { roleId, username, scope } = bodyParams;
+			const { roleId, username, roomId, scope } = bodyParams;
+			const roleScope = scope ?? roomId;
 
 			if (!roleId) {
 				return API.v1.failure('error-invalid-role-properties');
@@ -292,7 +293,7 @@ const rolesRoutes = API.v1
 				throw new ClientSafeError('error-invalid-roleId', 'This role does not exist');
 			}
 
-			if (!(await hasAnyRoleAsync(user._id, [role._id], scope))) {
+			if (!(await hasAnyRoleAsync(user._id, [role._id], roleScope))) {
 				throw new ClientSafeError('error-user-not-in-role', 'User is not in this role');
 			}
 
@@ -303,7 +304,7 @@ const rolesRoutes = API.v1
 				}
 			}
 
-			await removeUserFromRolesAsync(user._id, [role._id], scope);
+			await removeUserFromRolesAsync(user._id, [role._id], roleScope);
 
 			if (settings.get('UI_DisplayRoles')) {
 				void api.broadcast('user.roleUpdate', {
@@ -313,7 +314,7 @@ const rolesRoutes = API.v1
 						_id: user._id,
 						username: user.username,
 					},
-					scope,
+					scope: roleScope,
 				});
 			}
 
